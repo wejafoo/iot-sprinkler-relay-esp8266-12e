@@ -3,3 +3,4 @@
 .pio
 venv
 cmake-build-*
+CMake*
