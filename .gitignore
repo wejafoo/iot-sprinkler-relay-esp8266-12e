@@ -1,5 +1,6 @@
 
-main.cpp
+src/main.cpp
+.ARCHIVE
 .pio
 venv
 cmake-build-*
