@@ -1,106 +1,301 @@
 
 
-// NOTE: guh -- https://forum.arduino.cc/t/pyserial-and-esptools-directory-error/671804/5
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#define relay_on LOW
-#define relay_off HIGH
-#define relay_pin_1 D1                   // Relay #1
-#define relay_pin_2 D2                   // Relay #2
-#define relay_pin_3 D5                   // Relay #3
-#define relay_pin_4 D6                   // Relay #4
-#define led_on LOW                       // LED
-#define led_off HIGH
-#define led_pin 16
-#define ssid "bilbo"                     // WiFi
-#define password "readyplayer1"
+#include <WiFiClientSecure.h>
+#include <ArduinoJson.h>
 
-ESP8266WebServer server(80);
+#ifndef STASSID
+	#define	STASSID	"bilbo"
+	#define	STAPSK	"readyplayer1"
+#endif
+#define PODID		1
+#define API_HOST	"dev.weja.us"
+#define API_PORT	5423
 
-void ReturnStatus() {
-    bool led_is_on    = digitalRead(led_pin)     == led_on;
-    Serial.printf( "LED is on: %s", led_is_on       ?"TRUE": "FALSE" );
-    bool zone1_is_on  = digitalRead(relay_pin_1) == relay_on;
-    Serial.printf( " -- Zone #1 is %s", zone1_is_on ?"TRUE": "FALSE" );
-    bool zone2_is_on  = digitalRead(relay_pin_2) == relay_on;
-    Serial.printf( " -- Zone #2 is %s", zone2_is_on ?"TRUE": "FALSE" );
-    bool zone3_is_on  = digitalRead(relay_pin_3) == relay_on;
-    Serial.printf( " -- Zone #3 is %s", zone3_is_on ?"TRUE": "FALSE" );
-    bool zone4_is_on  = digitalRead(relay_pin_4) == relay_on;
-    Serial.printf( " -- Zone #4 is %s", zone4_is_on ?"TRUE": "FALSE" );
+const bool isDebug	= true;
+const bool z3		= true;
 
-    // If you want one, you can write it yourself. Here's what you need to think about:
-    // - Who is going to allocate the storage for the returned string?
-    // - Who is going to free the storage for the returned string?
-    // - Is it going to be thread-safe or not?
-    // - Is there going to be a limit on the maximum length of the returned string or not?
+const int zone1 = D1;		// gpio: 5	--
+const int zone2 = D2;		// gpio: 4	--
+const int zone3 = D3;		// gpio: 0	-- boot failure if pulled LOW
+const int zone4 = D4;		// gpio: 2 	-- pin is high on BOOT, boot failure if pulled LOW
+const int zone5 = D5;		// gpio: 14	-- "low-voltage" signal at BOOT
+const int zone6 = D6;		// gpio: 12	-- "low-voltage" signal at BOOT
+const int zone7 = false;	// gpio: 13	-- pin is high at BOOT
+const int zone8 = false;	// gpio: 15	-- boot failure if pulled HIGH
 
-    char statusReturn[800];
-    int truncCount = snprintf(statusReturn, 800, "{led: [led1:%s], pod1: [zone1:%s, zone2:%s, zone3:%s, zone4:%s], pod2: [zone1:%s, zone2:%s, zone3:%s, zone4:%s]}",
-        led_is_on?"1": "0", zone1_is_on?"1": "0", zone2_is_on?"1": "0", zone3_is_on?"1": "0", zone4_is_on?"1": "0", zone1_is_on?"1": "0", zone2_is_on?"1": "0", zone3_is_on?"1": "0", zone4_is_on?"1": "0"
-    );
+const char *	ssid		= STASSID;
+const char *	pwd			= STAPSK;
+const int		podId		= PODID;
+const String	host		= API_HOST;
+const int		port		= API_PORT;
+const int		sleep		= 3600000;
+const int		sleepOnTest	= 2500;
+const int		sleepOnDoh	= 10000;
 
-    Serial.println("Truncation count: " + String(truncCount));
+String		deviceMacId	= "";
+WiFiClient	client;
 
-    server.send(200,"text/plain", statusReturn);
+void bootTest() {
+	if (zone1) {
+		delay(sleepOnTest);
+		Serial.println("zone1> ON(low)");
+		digitalWrite(zone1, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone1> OFF(high)");
+		digitalWrite(zone1, HIGH);
+	}
+	if (zone2) {
+		delay(sleepOnTest);
+		Serial.println("zone2> ON(low)");
+		digitalWrite(zone2, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone2> OFF(high)");
+		digitalWrite(zone2, HIGH);
+	}
+	if (z3) {									// boolean test doesn't work for zone3(a.k.a int "0", a.k.a. "false")
+		delay(sleepOnTest);
+		Serial.println("zone3> ON(low)");
+		digitalWrite(zone3, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone3> OFF(high)");
+		digitalWrite(zone3, HIGH);
+	}
+	if (zone4) {
+		delay(sleepOnTest);
+		Serial.println("zone4> ON(low)");
+		digitalWrite(zone4, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone4> OFF(high)");
+		digitalWrite(zone4, HIGH);
+	}
+	if (zone5) {
+		delay(sleepOnTest);
+		Serial.println("zone5> ON(low)");
+		digitalWrite(zone5, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone5> OFF(high)");
+		digitalWrite(zone5, HIGH);
+	}
+	if (zone6) {
+		delay(sleepOnTest);
+		Serial.println("zone6> ON(low)");
+		digitalWrite(zone6, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone6> OFF(high)");
+		digitalWrite(zone6, HIGH);
+	}
+	if (zone7) {
+		delay(sleepOnTest);
+		Serial.println("zone7> ON(low)");
+		digitalWrite(zone7, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone7> OFF(high)");
+		digitalWrite(zone7, HIGH);
+	}
+	if (zone8) {
+		delay(sleepOnTest);
+		Serial.println("zone8> ON(low)");
+		digitalWrite(zone8, LOW);
+		delay(sleepOnTest);
+		Serial.println("zone8> OFF(high)");
+		digitalWrite(zone8, HIGH);
+	}
 }
 
-void SetPin(byte pin_number, byte new_pin_state) {
-    digitalWrite(pin_number, new_pin_state);
-    Serial.print("\nSetting pin#");
-    Serial.print(pin_number);
-    Serial.print(" to: ");
-    Serial.println(new_pin_state);
-    ReturnStatus();
-}
 
 void setup() {
-    pinMode(relay_pin_1, OUTPUT);
-    pinMode(relay_pin_2, OUTPUT);
-    pinMode(relay_pin_3, OUTPUT);
-    pinMode(relay_pin_4, OUTPUT);
-    SetPin(relay_pin_1, relay_off);
-    SetPin(relay_pin_2, relay_off);
-    SetPin(relay_pin_3, relay_off);
-    SetPin(relay_pin_4, relay_off);
+	Serial.begin(115200);
+	if (zone1) {
+		digitalWrite(zone1, HIGH);			// write HIGH before setting pinMode to avoid flapping the solenoid at boot
+		pinMode(zone1, OUTPUT);
+	}
+	if (zone2) {
+		digitalWrite(zone2, HIGH);
+		pinMode(zone2, OUTPUT);
+	}
+	if (z3) {								// boolean test doesn't work for zone3(a.k.a int "0", a.k.a. "false")
+		digitalWrite(zone3, HIGH);
+		pinMode(zone3, OUTPUT);
+	}
+	if (zone4) {
+		digitalWrite(zone4, HIGH);
+		pinMode(zone4, OUTPUT);
+	}
+	if (zone5) {
+		digitalWrite(zone5, HIGH);
+		pinMode(zone5, OUTPUT);
+	}
+	if (zone6) {
+		digitalWrite(zone6, HIGH);
+		pinMode(zone6, OUTPUT);
+	}
+	if (zone7) {
+		digitalWrite(zone7, HIGH);
+		pinMode(zone7, OUTPUT);
+	}
+	if (zone8) {
+		digitalWrite(zone8, HIGH);
+		pinMode(zone8, OUTPUT);
+	}
+	WiFi.mode(WIFI_STA);					// allows only WiFi connects
+	deviceMacId	= WiFi.macAddress();
+	WiFi.begin(ssid, pwd);
+	while ( WiFi.status() != WL_CONNECTED ) {
+		if (isDebug) Serial.print(".");
+		delay(1000);
+	}
 
-    Serial.begin(115200);
-    pinMode(led_pin, OUTPUT);
+	Serial.println( "WiFi connected!");
+	Serial.print("IP address: \n");
+	Serial.println(WiFi.localIP());
+	Serial.print("Hardware MAC address: \n");
+	Serial.println(WiFi.macAddress().c_str());
 
-    Serial.println();
-    Serial.println("Configuring access point...");
-    WiFi.begin(ssid, password);
-    while ( WiFi.status() != WL_CONNECTED ) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println( "WiFi connected!");
-    Serial.print("IP address: \n");
-    Serial.println(WiFi.localIP());
-
-    server.on("/stat"                   , []() { ReturnStatus();                  });
-    server.on("/led/1"                  , []() { SetPin(led_pin,     led_on    ); });
-    server.on("/led/0"                  , []() { SetPin(led_pin,     led_off   ); });
-    server.on("/pod/1/zone/1/action/1"  , []() { SetPin(relay_pin_1, relay_on  ); });
-    server.on("/pod/1/zone/1/action/0"  , []() { SetPin(relay_pin_1, relay_off ); });
-    server.on("/pod/1/zone/2/action/1"  , []() { SetPin(relay_pin_2, relay_on  ); });
-    server.on("/pod/1/zone/2/action/0"  , []() { SetPin(relay_pin_2, relay_off ); });
-    server.on("/pod/1/zone/3/action/1"  , []() { SetPin(relay_pin_3, relay_on  ); });
-    server.on("/pod/1/zone/3/action/0"  , []() { SetPin(relay_pin_3, relay_off ); });
-    server.on("/pod/1/zone/4/action/1"  , []() { SetPin(relay_pin_4, relay_on  ); });
-    server.on("/pod/1/zone/4/action/0"  , []() { SetPin(relay_pin_4, relay_off ); });
-    server.on("/pod/2/zone/1/action/1"  , []() { SetPin(relay_pin_1, relay_on  ); });
-    server.on("/pod/2/zone/1/action/0"  , []() { SetPin(relay_pin_1, relay_off ); });
-    server.on("/pod/2/zone/2/action/1"  , []() { SetPin(relay_pin_2, relay_on  ); });
-    server.on("/pod/2/zone/2/action/0"  , []() { SetPin(relay_pin_2, relay_off ); });
-    server.on("/pod/2/zone/3/action/1"  , []() { SetPin(relay_pin_1, relay_on  ); });
-    server.on("/pod/2/zone/3/action/0"  , []() { SetPin(relay_pin_1, relay_off ); });
-    server.on("/pod/2/zone/4/action/1"  , []() { SetPin(relay_pin_2, relay_on  ); });
-    server.on("/pod/2/zone/4/action/0"  , []() { SetPin(relay_pin_2, relay_off ); });
-    Serial.print("HTTP server starting..." );
-    server.begin();
-    Serial.print("done" );
+	bootTest();
 }
 
-void loop() { server.handleClient(); }
+
+void loop() {
+	
+	client.setTimeout(20000);
+	if ( client.connect(host, port) ) {
+		if (isDebug) Serial.printf(
+			"connected %s as %s ... continuing",
+			WiFi.macAddress().c_str(),
+			WiFi.localIP().toString().c_str()
+		);
+	} else {
+		if (isDebug) Serial.println("not connected... retrying");
+		delay(sleepOnDoh);
+		return;
+	}
+
+	client.printf("GET /api/pod/%d?device=%s HTTP/1.1", podId, deviceMacId.c_str());
+	client.printf("\r\nHost: %s\r\nReferer: %s\r\nAccept: application/json\r\nConnection: close\r\n\r\n", host.c_str(), deviceMacId.c_str());
+
+	while ( client.connected() || client.available() ) {
+		if ( client.available() ) {
+			String line = client.readStringUntil('\n');
+			if (line == "\r") break;
+		}
+	}
+
+	DynamicJsonDocument doc(2560);				// FYI, arduinojson.org/v6/assistant way underestimated with 256
+	DeserializationError error = deserializeJson(doc, client);
+	if ( error ) {
+		if (isDebug) Serial.printf("????????????????????? %s", error.c_str());
+		client.stop();
+		delay(sleepOnDoh);		// Override the full loop cycle and try to connect again sooner... not too soon though
+		return;
+	}
+
+	const JsonObject	podObj	= doc.as<JsonObject>();
+	const int			pod		= podObj["pod"];
+	if ( pod == podId ) {
+		JsonObject zoneObj	= podObj["payload"].as<JsonObject>();
+		if ( zoneObj.containsKey("1")||zoneObj.containsKey("2")||zoneObj.containsKey("3")||zoneObj.containsKey("4")) {
+			if (zoneObj.containsKey("1")) {
+				int duration = zoneObj["1"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone1> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone1, duration/60000);
+					digitalWrite(zone1, LOW);
+					delay(duration);
+					Serial.printf("\n\tZone1> OFF(active high(~(+4.7v))");
+					digitalWrite(zone1, HIGH);
+				}
+			}
+			if (zoneObj.containsKey("2")) {
+				int duration = zoneObj["2"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone2> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone2, duration/60000);
+					digitalWrite(zone2, LOW);
+					delay(duration);
+					Serial.printf("\n\tZone2> OFF(active high(~(+4.7v))");
+					digitalWrite(zone2, HIGH);
+				}
+			}
+			if (zoneObj.containsKey("3")) {
+				int duration = zoneObj["3"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone3> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone3, duration/60000);
+					digitalWrite(zone3, LOW);
+					delay(duration);
+					Serial.printf("\tZone3> OFF(active high(~(+4.7v))");
+					digitalWrite(zone3, HIGH);
+				}
+			}
+			if (zoneObj.containsKey("4")) {
+				int duration = zoneObj["4"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone4> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone4, duration/60000);
+					digitalWrite(zone4, LOW);
+					delay(duration);
+					Serial.printf("\n\tZone4> OFF(active high(~(+4.7v))");
+					digitalWrite(zone4, HIGH);
+				}
+			}
+			if (zoneObj.containsKey("5")) {
+				int duration = zoneObj["5"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone5> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone5, duration/60000);
+					digitalWrite(zone5, LOW);
+					delay(duration);
+					Serial.printf("\n\tZone5> OFF(active high(~(+4.7v))");
+					digitalWrite(zone5, HIGH);
+				}
+			}
+			if (zoneObj.containsKey("6")) {
+				int duration = zoneObj["6"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone6> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone6, duration/60000);
+					digitalWrite(zone6, LOW);
+					delay(duration);
+					Serial.printf("\n\tZone6> OFF(active high(~(+4.7v))");
+					digitalWrite(zone6, HIGH);
+				}
+			}
+			if (zoneObj.containsKey("7")) {
+				int duration = zoneObj["7"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone7> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone7, duration/60000);
+					digitalWrite(zone7, LOW);
+					delay(duration);
+					Serial.printf("\n\tZone7> OFF(active high(~(+4.7v))");
+					digitalWrite(zone7, HIGH);
+				}
+			}
+			if (zoneObj.containsKey("8")) {
+				int duration = zoneObj["8"].as<int>();
+				if (duration > 0) {
+					Serial.printf("\n\tZone8> gpio: %i\tON(active low(~(-2.2v)): %.2d minutes", zone8, duration/60000);
+					digitalWrite(zone8, LOW);
+					delay(duration);
+					Serial.printf("\n\tZone8> OFF(active high(~(+4.7v))");
+					digitalWrite(zone8, HIGH);
+				}
+			}
+		} else {
+			if (isDebug) Serial.println("no instructions in pod1 object\n...  ZzZzZzZzZzZzZzZzZzZz ...");
+		}
+	} else {
+		if (isDebug) Serial.println("nothing doing\n...  ZzZzZzZzZzZzZzZzZzZz  ...");
+	}
+	client.stop();
+	if (isDebug) Serial.println("...  ZzZzZzZzZzZzZzZzZzZz  ...");
+	delay(sleep);
+}
+
+
+
+// Secure Web Client
+/*
+	if (apiIsTest) {
+		host = HOST_TEST;
+		port = PORT_TEST;
+		WiFiClientSecure client2;		// Todo: Make WiFiClient conditionally inherit WifiClientSecure for non-local
+		client2.setInsecure();			// Skip surprisingly tedious verification for now |:^o Todo: consider SSL fingerprint impl
+	}
+*/
+
