@@ -1,7 +1,8 @@
 
-../../../../../../Library/Application Support/JetBrains/CLion2021.1/scratches/main.cpp
+main.cpp
 .ARCHIVE
 .pio
+.idea
 venv
 cmake-build-*
 CMake*

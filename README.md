@@ -1,6 +1,13 @@
 
 # IotSprinklerRelayEsp8266-12e
 
+**UPDATE:** Newly outfitted with a ham-handed web server implementation that checks for browser
+requests within the control loop.  Not great(or secure) when paired with a serverless cloud API,
+it's a nice add for local testing.  Just lob a request like so to enable specific relays: 
+`http://<<<device ip>>>?z=1&d=100000` , where _**z=zone number**_ and _**d=duration**_ (in milliseconds)
+
+---
+
 Wi-Fi controller flash configuration that uses either of the following
 platformio profiles:
 
