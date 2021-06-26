@@ -1,8 +1,8 @@
-
-main.cpp
-.ARCHIVE
 .pio
+CMakeListsPrivate.txt
+cmake-build-*/ 
+
+src/main.cpp
+.ARCHIVE
 .idea
 venv
-cmake-build-*
-CMake*

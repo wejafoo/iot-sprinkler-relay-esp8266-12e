@@ -2,9 +2,12 @@
 # IotSprinklerRelayEsp8266-12e
 
 **UPDATE:** Newly outfitted with a ham-handed web server implementation that checks for browser
-requests within the control loop.  Not great(or secure) when paired with a serverless cloud API,
-it's a nice add for local testing.  Just lob a request like so to enable specific relays: 
-`http://<<<device ip>>>?z=1&d=100000` , where _**z=zone number**_ and _**d=duration**_ (in milliseconds)
+requests within the control loop.  Not great/secure, especially when paired with a serverless cloud API,
+it's a nice add for local testing, just lob a request at the specific device like so: 
+
+`http://<<<device ip>>>?z=1&d=100000`
+
+where _**z=zone number**_ and _**d=duration**_ (in milliseconds)
 
 ---
 
@@ -27,13 +30,27 @@ platformio profiles:
 
 Configured with [micro-sprinkler-api](https://github.com/wejafoo/iot-sprinkler-relay-esp8266-12e)
 the solenoid relay can be triggered by a subscription proxy to a GCP pubsub topic which carries
-JSON relay instruction as payload.  Conversely, the relays can be fired with a direct http request 
-with a path similar to `/pod/1/zone/1/action/1`, where "pod" refers to the board, "zone" refers to the 
-specific relay, and "action" which turns on or off the given relay.
+JSON relay instruction as payload.
 
-For minimal build configuration, just copy main.<config option>.cpp to main.cpp and build using the 
-preferred Platformio build profile.
+For minimal build configuration, just copy `./versions/main.cpp.<<<config option>>>` to `./src/main.cpp`
+and build using the Platformio profile of choice.
 
-The api can run securely without the need to manage certificates behind a firewall or with minimal configuration on a serverless
-instance in the cloud.
+The api can run securely without the need to manage certificates behind a firewall or
+with minimal configuration on a serverless instance in the cloud.
 
+---
+
+### OTA
+
+The `main.cpp.combo.ota` variant supports pushing updates remotely using
+`LittleFS.h` and can be readily configured to fit existing pipeline deployments, or with little/no
+code changes this variant support manual pushes via default platformio profile config.
+
+**NOTE:** The latter push is likely to fail with `[ERROR]: No Answer` message due 
+to the loop cycle sleep which is included to cut down on API calls, particularly important for
+serverless API configurations, where continuous API requests can result in much higher
+server costs, unnecessarily.
+
+If this is not a consideration for the implementation, it should be resolved by defining 
+`API_SLEEP` period to below that of the default timeout(10 s) or removing the sleep at the 
+loop's end, altogether.
